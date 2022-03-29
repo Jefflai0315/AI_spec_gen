@@ -1,16 +1,19 @@
 
 import requests
-from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 import re
 from collections import deque
+import bs4
+from bs4 import BeautifulSoup
+import streamlit as st
 
 
 item_name = []
 prices = []
 
 # open new soup with a new url
+@st.cache
 def get_page(url):
     response =  requests.get(url)
     if not response.ok:
@@ -26,13 +29,11 @@ def get_detail_data(soup):
         title = soup.find('h1', attrs = {'class':"x-item-title__mainTitle"}).find('span').text
     except:
         title =' '
-
     try:
         price = soup.find('div', attrs = {'class':"mainPrice"}).find('span')
         price = price.get('content')
     except:
         price =' '
-
     try: 
         sold = soup.find('div', attrs = {'id':"why2buy"}).find('span').text #.split(' ')[0]
     except:
@@ -51,12 +52,8 @@ def get_detail_data(soup):
         if specs[0][1][:10] == specs[1][0][:10]:
             specs[0][1] = specs[1][0]
             del specs[1]
-        
         print_single_df(specs)
-
-
         specs_dict = {}
-
         for i in specs:
             specs_dict[i[0]] = i[1]
         print(specs_dict)
@@ -68,6 +65,7 @@ def print_single_df(specs):
     df = pd.DataFrame(specs, columns = ['Specs title','Specs value'])
     print(df)
 
+@st.cache
 def get_search_term(search_term, page_num=3):
     print('--------------')
     st_list = search_term.split(' ')
@@ -96,10 +94,9 @@ def get_search_term(search_term, page_num=3):
     #extract model name
     df['Model Name'] = df['Specs'].apply(lambda x : x['Brand:'] +' ' + x['Model:'])
     print(df)
-    return array
+    return df
     
 
-links_list =get_search_term('coffee maker')  
 
 
 
