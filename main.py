@@ -1,11 +1,12 @@
-from google_key import *
+# from google_key import *
+import streamlit as st 
+import ebay_api
 
-#insert household item name here
-main_query = ""
+def main():
+    input = st.text_input('Search Term')
+    results = ebay_api.get_search_term(input)
+    st.write(results)
 
-if __name__ == "__main__": 
-    # pipeline 
-    # get_models from ebay 
-    # youtube and reddit to get comments, sentiment analysis 
-    # ml model 
-    pass 
+if __name__ == "__main__":
+    main()
+    

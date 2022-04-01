@@ -1,1 +1,9 @@
 google_key.py
+
+.venv
+/venv
+
+
+keys.txt
+
+__pycache__
