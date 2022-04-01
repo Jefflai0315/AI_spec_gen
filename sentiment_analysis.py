@@ -1,208 +1,73 @@
-from googleapiclient.discovery import build
-import pickle
-import os
-import pandas as pd
-from google_key import * 
+import nltk
+nltk.download('stopwords')
+nltk.download('wordnet')
 
-class ScrapingApi: 
-    def __init__(self, key): 
-        self.key = key
-
-class Youtube_api(ScrapingApi): 
-    def __init__(self, key): 
-        super().__init__(key)
-        self.youtube = build('youtube', 'v3', developerKey=key)
-    
-    def search(self, search_query, max_result=20):
-        
-        pass 
+import pandas as pd 
+from nltk.corpus import stopwords 
+import math 
+import statistics 
+from sklearn.feature_extraction.text import CountVectorizer 
+from nltk.tokenize import TreebankWordTokenizer
+from nltk.stem import WordNetLemmatizer
 
 
+def sentiment_analysis(dataframes): 
+    # dataframes must have the colums model, comments, platform 
+    for df in dataframes: 
+        assert df.columns == ["model", "comments", "platform"]
 
-search_terms = "Brand Product Model"            # INSERT Search words
-max_result = 20                                 # No. of results (1-50)
-api_key = key 
-
-youtube = build('youtube', 'v3', developerKey=api_key)
-
-vid_id = []             	# video id
-vid_page = []       		# video links (https...)
-vid_title = []              # video title
-num_comments = []           # official number of comments
-load_error = 0              # error counter
-can_load_title = []         # temp. list for storing title w/o loading error
-can_load_page = []          # temp. list for storing links w/o loading error
-num_page = []               # comment_response page number
-page_title = []             # comment_response video title
-comment_resp = []           # comment_response
-comment_list = []           # temp. list for storing comments
-comment_data = []           # comments & replies from comment_response
-all_count = 0               # total number of comments
-
-'''search for videos'''
-print("Search for videos...")
-request = youtube.search().list(
-    q=search_terms,
-    maxResults=max_result,
-    part="id",
-    type="video"
-    )
-search_response = request.execute()
-print(search_response)
-# Copy & Paste
-
-for i in range(max_result):
-    videoId = search_response['items'][i]['id']['videoId']
-    print(videoId)
-    vid_id.append(videoId)
-    page = "https://www.youtube.com/watch?v=" + videoId
-    print(page)
-    vid_page.append(page)
-
-print("There are", len(vid_page), "videos.")
-# Copy & Paste
+    df_combined = pd.concat(dataframes)
+    df_combined['cleaned_comments'] = df_combined['comments'].apply(lambda t: preprocess_text(t))
 
 
-'''get video data'''
-print("Get video data...")
-for i in range(len(vid_id)):
-    request = youtube.videos().list(
-        part="snippet, statistics",
-        id=vid_id[i]
-        )
-    video_response = request.execute()
-    print(video_response)
-    # Copy & Paste
+def preprocess_text(text):                               # user defined function for cleaning text
+    text = text.lower()                             # all lower case
+    text = re.sub(r'\[.*?\]', ' ', text)            # remove text within [ ] (' ' instead of '')
+    text = re.sub(r'\<.*?\>', ' ', text)            # remove text within < > (' ' instead of '')
+    text = re.sub(r'http\S+', ' ', text)            # remove website ref http
+    text = re.sub(r'www\S+', ' ', text)             # remove website ref www
 
-    title = video_response['items'][0]['snippet']['title']
-    vid_title.append(title)
-    try:                        # use try/except as some "comments are turned off"
-        comment_count = video_response['items'][0]['statistics']['commentCount']
-        print("Video", i + 1, "-", title, "-- Comment count: ", comment_count)
-        num_comments.append(comment_count)
-    except:
-        print("Video", i + 1, "-", title, "-- Comments are turned off")
-        num_comments.append(0)
-    # Copy & Paste
+    text = text.replace('€', 'euros')               # replace special character with words
+    text = text.replace('£', 'gbp')                 # replace special character with words
+    text = text.replace('$', 'dollar')              # replace special character with words
+    text = text.replace('%', 'percent')             # replace special character with words
+    text = text.replace('\n', ' ')                  # remove \n in text that has it
 
-'''get comment data'''
-print("Get comment data...")
-for i in range(len(vid_id)):
-    try:        # in case loading error
-        request = youtube.commentThreads().list(
-            part="snippet,replies",
-            videoId=vid_id[i]
-            )
-        comment_response = request.execute()
-        print(comment_response)
-        # Copy & Paste (with except: print("error"))
+    text = text.replace('\'', '’')                  # standardise apostrophe
+    text = text.replace('&#39;', '’')               # standardise apostrophe
 
-        comment_resp.append(comment_response)   # append 1 page of comment_response
-        pages = 1
-        num_page.append(pages)                  # append page number of comment_response
-        page_title.append(vid_title[i])         # append video title along with the comment_response
+    text = text.replace('’d', ' would')             # remove ’ (for would, should? could? had + PP?)
+    text = text.replace('’s', ' is')                # remove ’ (for is, John's + N?)
+    text = text.replace('’re', ' are')              # remove ’ (for are)
+    text = text.replace('’ll', ' will')             # remove ’ (for will)
+    text = text.replace('’ve', ' have')             # remove ’ (for have)
+    text = text.replace('’m', ' am')                # remove ’ (for am)
+    text = text.replace('can’t', 'can not')         # remove ’ (for can't)
+    text = text.replace('won’t', 'will not')        # remove ’ (for won't)
+    text = text.replace('n’t', ' not')              # remove ’ (for don't, doesn't)
 
-        can_load_page.append(vid_page[i])       # drop link if it can't load (have at least 1 comment page)
-        can_load_title.append(vid_title[i])     # drop title if it can't load (have at least 1 comment page)
+    text = text.replace('’', ' ')                   # remove apostrophe (in general)
+    text = text.replace('&quot;', ' ')              # remove quotation sign (in general)
 
-        test = comment_response.get('nextPageToken', 'nil')     # check for nextPageToken
-        while test != 'nil':                                    # keep running until last comment page
-            next_page_ = comment_response.get('nextPageToken')
-            request = youtube.commentThreads().list(
-                part="snippet,replies",
-                pageToken=next_page_,
-                videoId=vid_id[i]
-                )
-            comment_response = request.execute()
-            print(comment_response)
+    text = text.replace('cant', 'can not')          # typo 'can't' (note that cant is a proper word)
+    text = text.replace('dont', 'do not')           # typo 'don't'
 
-            comment_resp.append(comment_response)   # append next page of comment_response
-            pages += 1
-            num_page.append(pages)              # append page number of comment_response
-            page_title.append(vid_title[i])     # append video title along with the comment_response
+    text = re.sub(r'[^a-zA-Z0-9]', r' ', text)      # only alphanumeric left
+    text = text.replace("   ", ' ')                 # remove triple empty space
+    text = text.replace("  ", ' ')                  # remove double empty space
 
-            test = comment_response.get('nextPageToken', 'nil')     # check for nextPageToken (while loop)
-    except:
-        load_error += 1
+    tokens = TreebankWordTokenizer().tokenize(text)
+    tokens = list(map(WordNetLemmatizer().lemmatize, tokens))
+    preprocessed_text = " ".join(tokens)
 
-# Copy & Paste
+    return preprocessed_text
 
-print("Videos that can load...")
-vid_page = can_load_page                    # update vid_page with those with no load error
-vid_title = can_load_title                  # update vid_title with those with no load error
-for i in range(len(vid_title)):
-    if vid_title[i] == 'YouTube':           # default error title is 'YouTube'
-        vid_title[i] = 'Video_' + str(i+1)  # replace 'YouTube' with Video_1 format
-    print(i + 1, vid_title[i])
-# Copy & Paste
+def clean_comments(text): 
+
+    extra_stopwords = ["wa", "doe", "ha", "video", "one", "subscribe", "channel", "watch", "watching", "thanks", "thank"] 
+    all_stopwords = stopwords.words('english')
+    all_stopwords.extend(extra_stopwords) 
+
+    return text 
 
 
-'''sift comments into structure'''
-print("Get individual comment...")
-for k in range(len(comment_resp)):
-    count = 0                                                     # comment counter
-    comments_found = comment_resp[k]['pageInfo']['totalResults']  # comments on 1 comment_response page
-    count = count + comments_found
-    for i in range(comments_found):
-        try:
-            comment_list.append(comment_resp[k]['items'][i]['snippet']['topLevelComment']['snippet']['textDisplay'])
-            print(comment_resp[k]['items'][i]['snippet']['topLevelComment']['snippet']['textDisplay'])
-            # Copy & Paste (with except: print("missing comment or too many"))
-
-            reply_found = comment_resp[k]['items'][i]['snippet']['totalReplyCount']    # for comment 'i'
-            count = count + min(reply_found, 5)     # YT provides max of 5 replies per comment
-            for j in range(min(reply_found, 5)):
-                try:
-                    comment_list.append(comment_resp[k]['items'][i]['replies']['comments'][j]['snippet']['textDisplay'])
-                    print(comment_resp[k]['items'][i]['replies']['comments'][j]['snippet']['textDisplay'])
-                    print(j+1, 'out of', reply_found, 'replies captured')
-                except:
-                    print("missing reply")
-        except:
-            print("missing comment")            # or too many comments (e.g. 7.3K comments)
-    # Copy & Paste (optional)
-
-    comment_data.append(comment_list.copy())    # all comments on 1 comment_response page, use .copy()
-    comment_list.clear()
-    all_count += count
-combined_data = list(zip(page_title, num_page, comment_data))
-print(combined_data)        # df format later
-print(combined_data[0])     # print entry 1
-print(combined_data[1])     # print entry 2
-# Copy & Paste
-
-
-'''create dir and save files'''
-try:                                            # Create directory named after search terms
-    os.makedirs("support/%s" % search_terms)
-    print("Directory", search_terms, "created")
-except FileExistsError:
-    print("Directory", search_terms, "exists")
-pickle.dump(search_terms, open("support/%s/searchTerms.pkl" % search_terms, "wb"))
-pickle.dump(vid_title, open("support/%s/vid_title.pkl" % search_terms, "wb"))
-pickle.dump(vid_page, open("support/%s/vid_page.pkl" % search_terms, "wb"))
-pickle.dump(combined_data, open("support/%s/combined_data.pkl" % search_terms, "wb"))
-
-try:                                            # Create directory to store current search terms
-    os.makedirs("support/_current_")
-    print("Directory _current_ created")
-except FileExistsError:
-    print("Directory _current_ exists")
-pickle.dump(search_terms, open("support/_current_/searchTerms.pkl", "wb"))
-# Copy & Paste
-
-
-'''print summary'''
-combined_data = pd.read_pickle("support/%s/combined_data.pkl" % search_terms)   # open as df
-pd.set_option('colwidth', 30)
-df = pd.DataFrame(combined_data, columns=['Title', 'Page', 'Comments'])
-
-print("\n<<<Summary>>>")
-print("Search terms:", search_terms)
-print(df)
-print("\nThere are", all_count, "comments captured in total")
-print(load_error, "videos had loading errors")
-# Copy & Paste
-
-# What was said in the video (caption)?
-# How many views did each video receive?
