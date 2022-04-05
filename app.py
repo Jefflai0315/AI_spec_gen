@@ -3,10 +3,15 @@ from pyexpat import model
 import streamlit as st 
 import ebay_api
 import reddit_api
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 #insert household item name here
 
+API_USERNAME = os.getenv('USER')
+API_KEY = os.getenv('KEY')
 
+print(API_KEY)
 #pipeline
 
 

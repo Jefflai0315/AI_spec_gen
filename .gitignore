@@ -7,3 +7,4 @@ google_key.py
 keys.txt
 
 __pycache__
+.env
