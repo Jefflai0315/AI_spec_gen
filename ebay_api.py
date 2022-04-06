@@ -66,11 +66,12 @@ def print_single_df(specs):
     print(df)
 
 @st.cache
-def get_search_term(search_term, page_num=3):
+def get_search_term(search_term, page_num=1):
     print('--------------')
     st_list = search_term.split(' ')
     links_list = deque([])
     for i in range(page_num):
+        print("in page", i )
         soup= get_page("https://www.ebay.com/sch/i.html?_from=R40&_trksid=p2499337.m570.l1311&_nkw="+'+'.join(st_list) +"&_sacat="+str(i))
         
         # get all listings 
